@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Staff Portal — Klinik Kesihatan Meru</title>
+<!-- GitHub Pages cannot send security headers, so the policy is set here.
+     Scripts may only come from this site and from Google's Firebase CDN;
+     the page may only talk to Firebase and to Apps Script. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://fcmregistrations.googleapis.com https://firebaseinstallations.googleapis.com https://script.google.com https://script.googleusercontent.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com; frame-src https://*.firebaseapp.com; base-uri 'self'; form-action 'self'; object-src 'none'">
+<meta name="referrer" content="same-origin">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Internal staff portal for Klinik Kesihatan Meru, Klang.">
+<meta name="theme-color" content="#00539b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="KK Meru">
+<link rel="stylesheet" href="styles.css">
+<script src="config.js"></script>
+<script src="boot-check.js" defer></script>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+
+<!-- ==================== SIGN-IN ==================== -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-head">
+      <div class="crest">KKM</div>
+      <h1>Klinik Kesihatan Meru</h1>
+      <p>Internal Staff Portal</p>
+    </div>
+
+    <!-- checking an existing sign-in -->
+    <div class="login-body" id="panelLoading">
+      <div class="spinner"></div>
+      <p class="lead" style="text-align:center;margin:0;" id="loadingText">Loading…</p>
+    </div>
+
+    <!-- normal sign-in -->
+    <form class="login-body" id="panelLogin" hidden autocomplete="on" novalidate>
+      <div style="text-align:center;"><span class="mode-badge secure">Secure sign-in</span></div>
+      <div class="msg" id="loginMsg" role="alert"></div>
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" autocomplete="current-password" required>
+      </div>
+      <div class="login-row">
+        <label><input type="checkbox" id="remember"> Keep me signed in on this device</label>
+        <button type="button" class="linkbtn" id="forgotBtn">Forgot password?</button>
+      </div>
+      <button type="submit" class="btn btn-full" id="loginBtn">Log In</button>
+      <p class="login-alt">New to the portal? <button type="button" class="linkbtn" id="showRegister">Register for access</button></p>
+    </form>
+
+    <!-- self-registration -->
+    <form class="login-body" id="panelRegister" hidden autocomplete="on" novalidate>
+      <p class="lead">Register once with your staff details. An administrator must <strong>approve</strong>
+        your registration before you can see anything in the portal.</p>
+      <div class="msg" id="regMsg" role="alert"></div>
+      <div class="login-section">1 · Your staff details</div>
+      <div id="regProfile"></div>
+      <div class="login-section">2 · Your login</div>
+      <div class="field">
+        <label for="regEmail">Email</label>
+        <input type="email" id="regEmail" autocomplete="email" maxlength="200">
+      </div>
+      <div class="field">
+        <label for="regPw">Password</label>
+        <input type="password" id="regPw" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label for="regPw2">Confirm password</label>
+        <input type="password" id="regPw2" autocomplete="new-password">
+      </div>
+      <ul class="rules" id="regRules">
+        <li data-rule="len"><span class="mark">○</span> At least 10 characters</li>
+        <li data-rule="letter"><span class="mark">○</span> Contains a letter</li>
+        <li data-rule="numsym"><span class="mark">○</span> Contains a number or symbol</li>
+        <li data-rule="notname"><span class="mark">○</span> Not your name, email or a common word</li>
+        <li data-rule="match"><span class="mark">○</span> Both password boxes match</li>
+      </ul>
+      <button type="submit" class="btn btn-full" id="regBtn" disabled>Register</button>
+      <p class="login-alt">Already have a login? <button type="button" class="linkbtn" id="showLogin">Log in</button></p>
+    </form>
+
+    <!-- signed in to Firebase but no request on file yet -->
+    <form class="login-body" id="panelRequest" hidden novalidate>
+      <p class="lead">You are signed in as <strong id="reqEmail"></strong>, but have not asked for
+        access yet. Fill in your staff details:</p>
+      <div class="msg" id="reqMsg" role="alert"></div>
+      <div id="reqProfile"></div>
+      <div class="btn-stack">
+        <button type="submit" class="btn" id="reqBtn">Request access</button>
+        <button type="button" class="btn ghost" data-signout>Log out</button>
+      </div>
+    </form>
+
+    <!-- waiting for approval -->
+    <div class="login-body" id="panelPending" hidden>
+      <div style="text-align:center;"><span class="mode-badge demo">Waiting for approval</span></div>
+      <div class="msg" id="pendMsg" role="alert"></div>
+      <p class="lead">Your request has been sent to the portal administrators. You will receive
+        an email when it is approved — then sign in again.</p>
+      <div class="msg info" id="pendVerify" hidden>
+        Please also <strong>verify your email address</strong> — open the link we emailed to
+        <strong id="pendEmail"></strong> (check spam). You cannot sign in until it is verified.
+      </div>
+      <div class="btn-stack">
+        <button type="button" class="btn" id="pendCheck">Check again</button>
+        <button type="button" class="btn ghost" id="pendResend" hidden>Resend verification email</button>
+        <button type="button" class="btn ghost" data-signout>Log out</button>
+      </div>
+    </div>
+
+    <!-- email address not yet verified -->
+    <div class="login-body" id="panelVerify" hidden>
+      <div class="msg" id="verifyMsg" role="alert"></div>
+      <p class="lead">Please confirm your email address before using the portal.
+        Click <strong>Send verification email</strong>, open the link in that email,
+        then come back and click <strong>I've verified — continue</strong>.</p>
+      <div class="btn-stack">
+        <button type="button" class="btn" id="verifyContinue">I've verified — continue</button>
+        <button type="button" class="btn ghost" id="verifySend">Send verification email</button>
+        <button type="button" class="btn ghost" id="verifyLogout">Log out</button>
+      </div>
+    </div>
+
+    <!-- config.js not filled in yet -->
+    <div class="login-body" id="panelSetup" hidden>
+      <div class="msg info" style="margin:0;">This portal has not been set up yet. The administrator needs to
+        fill in <code>config.js</code> (see README).</div>
+    </div>
+
+    <div class="login-foot" id="loginFoot">For authorised clinic staff only. Access is logged.</div>
+    <div class="install-foot" id="installFoot" hidden>
+      <span id="installText"></span><br>
+      <button type="button" class="btn sm" id="installBtn" hidden>Install app</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== APP ==================== -->
+<div id="app" hidden>
+
+<div class="utility">
+  <div class="wrap">
+    <span>KEMENTERIAN KESIHATAN MALAYSIA<span class="sep">|</span>Pejabat Kesihatan Daerah Klang</span>
+    <span>
+      <span id="adminLinks" hidden><button class="link" id="editToggle">Edit mode</button><span class="sep">|</span></span>
+      <button class="link" id="notifBtn">🔔 Notifications</button><span class="sep">|</span>
+      <button class="link" id="accountBtn">My Account</button><span class="sep">|</span>
+      <button class="link" id="pwBtn">Change Password</button><span class="sep">|</span>
+      <button class="link" id="logoutBtn">Log Out</button>
+    </span>
+  </div>
+</div>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="crest-sm">KKM</div>
+    <div class="brand">
+      <h1>Klinik Kesihatan Meru — Staff Portal</h1>
+      <p>Jalan Kenangan, 41050 Meru, Klang, Selangor</p>
+    </div>
+    <div class="session">
+      Signed in as
+      <strong><span id="whoName">—</span><span class="role-chip" id="whoRole"></span></strong>
+      <span id="clock"></span>
+    </div>
+  </div>
+</header>
+
+<nav class="mainnav">
+  <div class="wrap" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="home">Dashboard</button>
+    <button role="tab" aria-selected="false" data-tab="announce">Announcements</button>
+    <button role="tab" aria-selected="false" data-tab="roster">Duty Roster</button>
+    <button role="tab" aria-selected="false" data-tab="forms">Forms &amp; SOP</button>
+    <button role="tab" aria-selected="false" data-tab="dir">Staff Directory</button>
+    <button role="tab" aria-selected="false" data-tab="accounts" id="navAccounts" hidden>Staff Accounts <span class="badge" id="pendBadge" hidden></span></button>
+  </div>
+</nav>
+
+<div id="editBar">
+  <div class="wrap">
+    <span class="dot"></span>
+    <strong>Edit mode is on.</strong>
+    <span>Nothing is saved until you click Save changes.</span>
+    <span class="spacer"></span>
+    <span id="saveState"></span>
+    <button class="btn sm" id="saveBtn">Save changes</button>
+    <button class="btn sm ghost" id="exportBtn">Export data file</button>
+    <button class="btn sm ghost" id="discardBtn">Discard</button>
+  </div>
+</div>
+
+<main>
+  <div class="wrap">
+
+    <!-- ============ DASHBOARD ============ -->
+    <section class="panel" id="home">
+      <div class="notice-bar push-prompt" id="pushPrompt" hidden>
+        <span>🔔 <strong>Get notified on this device</strong> — urgent announcements and roster changes,
+          even when the portal is closed.</span>
+        <span class="row-actions"><button class="btn sm" id="pushPromptOn">Turn on</button>
+          <button class="btn sm ghost" id="pushPromptLater">Not now</button></span>
+      </div>
+      <div class="notice-bar" id="pendingNotice" hidden>
+        <strong id="pendingNoticeText"></strong>
+        <button class="btn sm" data-goto="accounts" style="margin-left:8px;">Review now</button>
+      </div>
+      <div class="grid grid-4" style="margin-bottom:18px;">
+        <div class="stat"><div class="label">On Duty Today</div><div class="value" id="statDuty">—</div><div class="note" id="statDutyNote">—</div></div>
+        <div class="stat"><div class="label">Staff on Leave</div><div class="value" id="statLeave">—</div><div class="note">Currently recorded</div></div>
+        <div class="stat"><div class="label">Announcements</div><div class="value" id="statAnn">—</div><div class="note" id="statAnnNote">—</div></div>
+        <div class="stat"><div class="label">Total Staff</div><div class="value" id="statStaff">—</div><div class="note" id="statStaffNote">—</div></div>
+      </div>
+      <div class="grid grid-2">
+        <div>
+          <div class="card">
+            <h2>Latest Announcements <span class="meta">Pinned first</span></h2>
+            <div id="homeAnn"></div>
+            <div style="padding:12px 18px;border-top:1px solid var(--line);">
+              <button class="btn ghost" data-goto="announce">View all announcements</button>
+            </div>
+          </div>
+          <div class="card">
+            <h2>On Duty Today <span class="meta">From the weekly roster</span></h2>
+            <div class="tbl-scroll">
+              <table>
+                <thead><tr><th>Staff on Duty</th><th>Unit</th><th>Shift</th><th>Ext.</th></tr></thead>
+                <tbody id="homeDuty"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <h2>Quick Links</h2>
+            <div class="body"><div class="qlinks" id="qlinks"></div></div>
+          </div>
+          <div class="card">
+            <h2>Clinic Information</h2>
+            <div class="body">
+              <dl class="kv">
+                <dt>Address</dt><dd>Jalan Kenangan, 41050 Meru, Klang, Selangor</dd>
+                <dt>Office hours</dt><dd>Mon–Fri, 8:00 AM – 5:00 PM</dd>
+                <dt>Main line</dt><dd><span class="placeholder">03-3392 XXXX</span></dd>
+                <dt>District office</dt><dd>PKD Klang</dd>
+                <dt>State</dt><dd>JKN Selangor</dd>
+              </dl>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Emergency Contacts</h2>
+            <div class="person emerg">
+              <div class="avatar">!</div>
+              <div><div class="n">Emergency / Code Blue</div><div class="r">Internal alert line</div></div>
+              <div class="ext-no"><div class="num">999</div><div class="lbl">Ext</div></div>
+            </div>
+            <div class="person">
+              <div class="avatar">MO</div>
+              <div><div class="n">Medical Officer On-Call</div><div class="r">See today's on-call list</div></div>
+              <div class="ext-no"><div class="num">211</div><div class="lbl">Ext</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ANNOUNCEMENTS ============ -->
+    <section class="panel" id="announce" hidden>
+      <h3 class="section-title">Announcements &amp; Noticeboard</h3>
+      <p class="section-sub">Circulars from PKD Klang and JKN Selangor, internal notices and clinic events.</p>
+      <div class="toolbar">
+        <input type="search" id="annSearch" placeholder="Search announcements…" aria-label="Search announcements">
+        <select id="annFilter" aria-label="Filter by category">
+          <option value="">All categories</option>
+          <option value="urgent">Urgent</option><option value="circular">Circular</option>
+          <option value="notice">Notice</option><option value="event">Event</option>
+        </select>
+        <button class="btn admin-only" data-add="announcements">+ New announcement</button>
+      </div>
+      <div class="card"><div id="annList"></div></div>
+    </section>
+
+    <!-- ============ ROSTER ============ -->
+    <section class="panel" id="roster" hidden>
+      <h3 class="section-title">Duty Roster &amp; Schedules</h3>
+      <p class="section-sub">Shift Pagi 8:00 AM–5:00 PM · Shift Petang 2:00–10:00 PM · Shift Malam 10:00 PM–8:00 AM.</p>
+      <div class="toolbar">
+        <select id="rosterUnit" aria-label="Filter by unit"><option value="">All units</option></select>
+        <button class="btn admin-only" data-add="roster">+ Add staff to roster</button>
+        <button class="btn ghost" id="printBtn" style="margin-left:auto;">Print roster</button>
+      </div>
+      <div class="card">
+        <h2>Weekly Roster <span class="meta">Today's column is highlighted</span></h2>
+        <p class="scroll-hint">Swipe the table sideways to see the whole week.</p>
+        <div class="tbl-scroll">
+          <table>
+            <thead><tr id="rosterHead"></tr></thead>
+            <tbody id="rosterBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="grid grid-2" style="margin-top:18px;">
+        <div class="card">
+          <h2>On-Call List <button class="btn sm admin-only" data-add="oncall">+ Add</button></h2>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Date</th><th>Medical Officer</th><th>Contact</th><th class="admin-only">Actions</th></tr></thead>
+              <tbody id="oncallBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Leave Calendar <button class="btn sm admin-only" data-add="leave">+ Add</button></h2>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th class="admin-only">Actions</th></tr></thead>
+              <tbody id="leaveBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FORMS ============ -->
+    <section class="panel" id="forms" hidden>
+      <h3 class="section-title">Forms &amp; SOP Library</h3>
+      <p class="section-sub">Downloadable forms, clinical SOPs and MOH guidelines.</p>
+      <div class="toolbar">
+        <input type="search" id="docSearch" placeholder="Search forms, SOPs, guidelines…" aria-label="Search documents">
+        <select id="docFilter" aria-label="Filter by category"><option value="">All categories</option></select>
+        <button class="btn admin-only" data-add="docs">+ Add document</button>
+      </div>
+      <div id="docList"></div>
+    </section>
+
+    <!-- ============ DIRECTORY ============ -->
+    <section class="panel" id="dir" hidden>
+      <h3 class="section-title">Staff Directory &amp; Extensions</h3>
+      <p class="section-sub">Internal extension numbers and unit contacts.</p>
+      <div class="toolbar">
+        <input type="search" id="dirSearch" placeholder="Search by name, role or unit…" aria-label="Search directory">
+        <select id="dirFilter" aria-label="Filter by unit"><option value="">All units</option></select>
+        <button class="btn admin-only" data-add="staff">+ Add staff (no portal account)</button>
+      </div>
+      <p class="notice-bar admin-only" style="width:100%;">Staff who registered for the portal appear here automatically
+        and are updated from <strong>Staff Accounts</strong>. Use “+ Add staff” only for people without a portal account.</p>
+      <div class="grid grid-2">
+        <div class="card">
+          <h2>Staff <span class="meta" id="dirCount"></span></h2>
+          <div id="dirList"></div>
+        </div>
+        <div class="card">
+          <h2>Unit Extensions <button class="btn sm admin-only" data-add="unitExt">+ Add</button></h2>
+          <div class="tbl-scroll">
+            <table>
+              <thead><tr><th>Unit / Counter</th><th>Ext.</th><th class="admin-only">Actions</th></tr></thead>
+              <tbody id="unitExt"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ACCOUNTS (admin) ============ -->
+    <section class="panel" id="accounts" hidden>
+      <h3 class="section-title">Staff Accounts</h3>
+      <p class="section-sub">The staff database. Staff register themselves with their position, unit and phone and wait
+        for your approval, or you can add them here. Only administrators can change anyone's position, grade, unit or
+        access — staff can update just their own name, mobile number and extension.</p>
+      <div class="card" id="pendingCard" style="margin-bottom:18px;">
+        <h2>Waiting for Approval <span class="meta" id="pendCount"></span></h2>
+        <div class="tbl-scroll">
+          <table>
+            <thead><tr><th>Name</th><th>Position</th><th>Unit</th><th>Mobile</th><th>Requested</th><th>Actions</th></tr></thead>
+            <tbody id="pendBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="toolbar">
+        <input type="search" id="accSearch" placeholder="Search name, email, position, phone…" aria-label="Search accounts">
+        <select id="accUnit" aria-label="Filter by unit"><option value="">All units</option></select>
+        <button class="btn" id="addAccountBtn">+ Add staff account</button>
+        <button class="btn ghost" id="exportStaffBtn">Export staff list (CSV)</button>
+        <button class="btn ghost" id="reloadAccountsBtn">Refresh</button>
+      </div>
+      <div class="card">
+        <h2>Accounts <span class="meta" id="accCount"></span></h2>
+        <div class="tbl-scroll">
+          <table>
+            <thead><tr><th>Name</th><th>Position</th><th>Unit</th><th>Contact</th><th>Access</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="accBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Recent Activity <button class="btn sm ghost" id="loadAuditBtn">Load activity log</button></h2>
+        <div class="tbl-scroll">
+          <table>
+            <thead><tr><th>Time</th><th>Who</th><th>Action</th><th>Detail</th></tr></thead>
+            <tbody id="auditBody"><tr><td colspan="4" class="empty">Click “Load activity log” to view the last 200 entries.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div><strong>Klinik Kesihatan Meru</strong> — Internal Staff Portal<br>
+      Pejabat Kesihatan Daerah Klang · Jabatan Kesihatan Negeri Selangor</div>
+    <div style="text-align:right;">For internal use only. No patient-identifiable data.<br><span id="footMode"></span></div>
+  </div>
+</footer>
+</div><!-- /#app -->
+
+<!-- ==================== GENERIC EDIT DIALOG ==================== -->
+<div class="overlay" id="modal"><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <h3 id="modalTitle">Edit</h3>
+  <div class="modal-body" id="modalBody"></div>
+  <div class="modal-foot">
+    <button class="btn ghost" id="modalCancel" type="button">Cancel</button>
+    <button class="btn" id="modalSave" type="button">Save</button>
+  </div>
+</div></div>
+
+<!-- ==================== CHANGE PASSWORD ==================== -->
+<div class="overlay" id="pwModal"><form class="modal-card" id="pwForm" autocomplete="off" novalidate role="dialog" aria-modal="true" aria-labelledby="pwTitle">
+  <h3 id="pwTitle">Change your password</h3>
+  <div class="modal-body">
+    <div class="msg" id="pwMsg" role="alert"></div>
+    <div class="field">
+      <label for="pwCurrent">Current password</label>
+      <input type="password" class="pw-input" id="pwCurrent" autocomplete="current-password">
+      <button type="button" class="reveal" data-reveal="pwCurrent">Show</button>
+    </div>
+    <div class="field">
+      <label for="pwNew">New password</label>
+      <input type="password" class="pw-input" id="pwNew" autocomplete="new-password">
+      <button type="button" class="reveal" data-reveal="pwNew">Show</button>
+    </div>
+    <div class="meter" id="pwMeter"><span></span></div>
+    <ul class="rules" id="pwRules">
+      <li data-rule="len"><span class="mark">○</span> At least 10 characters</li>
+      <li data-rule="letter"><span class="mark">○</span> Contains a letter</li>
+      <li data-rule="numsym"><span class="mark">○</span> Contains a number or symbol</li>
+      <li data-rule="notname"><span class="mark">○</span> Not your name, email or a common word</li>
+      <li data-rule="diff"><span class="mark">○</span> Different from your current password</li>
+      <li data-rule="match"><span class="mark">○</span> Both new password boxes match</li>
+    </ul>
+    <div class="field">
+      <label for="pwConfirm">Confirm new password</label>
+      <input type="password" class="pw-input" id="pwConfirm" autocomplete="new-password">
+      <button type="button" class="reveal" data-reveal="pwConfirm">Show</button>
+    </div>
+    <p class="small" style="margin:0;">Changing your password signs this account out on every other device.</p>
+  </div>
+  <div class="modal-foot">
+    <button type="button" class="btn ghost" id="pwCancel">Cancel</button>
+    <button type="submit" class="btn" id="pwSave">Update password</button>
+  </div>
+</form></div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
